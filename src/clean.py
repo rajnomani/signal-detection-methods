@@ -2,17 +2,41 @@ import duckdb
 from pathlib import Path
 
 COMB = Path("data/combined")
+RAW = Path("data/raw")
 OUT = Path("data/clean")
+TMP = Path("data/tmp")
 OUT.mkdir(parents=True, exist_ok=True)
+TMP.mkdir(parents=True, exist_ok=True)
 
 con = duckdb.connect()
 con.execute("PRAGMA memory_limit='4GB'")
+con.execute(f"PRAGMA temp_directory='{TMP}'")
 
 demo = f"read_parquet('{COMB}/all_demo.parquet')"
 drug = f"read_parquet('{COMB}/all_drug.parquet')"
 reac = f"read_parquet('{COMB}/all_reac.parquet')"
 
-# 1. Keep only the latest version of each case
+# 1. Load the FDA lists of deleted cases
+files = [str(f) for f in RAW.rglob("*.txt") if f.name.upper().startswith("DELETE")]
+print(f"Found {len(files)} deleted-case lists")
+if files:
+    con.execute(f"""
+        CREATE TEMP TABLE deleted AS
+        SELECT DISTINCT TRIM(caseid) AS caseid
+        FROM read_csv({files!r}, header=false, all_varchar=true, delim='$',
+                      columns={{'caseid': 'VARCHAR'}}, ignore_errors=true)
+        WHERE regexp_matches(TRIM(caseid), '^[0-9]+$')
+    """)
+else:
+    con.execute("CREATE TEMP TABLE deleted (caseid VARCHAR)")
+
+n_del = con.execute(f"""
+    SELECT COUNT(DISTINCT caseid) FROM {demo}
+    WHERE caseid IN (SELECT caseid FROM deleted)
+""").fetchone()[0]
+print(f"Deleted cases found in the data: {n_del:,}")
+
+# 2. Keep only the latest version of each non-deleted case
 con.execute(f"""
     CREATE TEMP TABLE keep AS
     SELECT primaryid FROM (
@@ -24,6 +48,7 @@ con.execute(f"""
                             primaryid DESC
                ) AS rn
         FROM {demo}
+        WHERE caseid NOT IN (SELECT caseid FROM deleted)
     ) WHERE rn = 1
 """)
 
@@ -31,14 +56,19 @@ n_before = con.execute(f"SELECT COUNT(*) FROM {demo}").fetchone()[0]
 n_after = con.execute("SELECT COUNT(*) FROM keep").fetchone()[0]
 print(f"DEMO: {n_before:,} reports -> {n_after:,} unique cases")
 
-# 2. Clean demographics
+# 3. Clean demographics (one row per primaryid)
 con.execute(f"""
     COPY (
-        SELECT d.* FROM {demo} d JOIN keep USING (primaryid)
+        SELECT * EXCLUDE (rn) FROM (
+            SELECT d.*, ROW_NUMBER() OVER (
+                PARTITION BY d.primaryid ORDER BY d.quarter DESC
+            ) AS rn
+            FROM {demo} d JOIN keep USING (primaryid)
+        ) WHERE rn = 1
     ) TO '{OUT}/demo.parquet' (FORMAT PARQUET)
 """)
 
-# 3. Clean drugs: suspect drugs only, standardized names
+# 4. Clean drugs: suspect drugs only, standardized names
 con.execute(f"""
     COPY (
         SELECT DISTINCT primaryid, drug, role_cod FROM (
@@ -50,7 +80,7 @@ con.execute(f"""
     ) TO '{OUT}/drug.parquet' (FORMAT PARQUET)
 """)
 
-# 4. Clean reactions
+# 5. Clean reactions
 con.execute(f"""
     COPY (
         SELECT DISTINCT primaryid, UPPER(TRIM(pt)) AS pt
