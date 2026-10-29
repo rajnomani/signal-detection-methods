@@ -2,7 +2,7 @@ import duckdb
 from pathlib import Path
 
 COMB = Path("data/combined")
-RAW = Path("data/raw")
+RAW = Path("data/deleted_lists")
 OUT = Path("data/clean")
 TMP = Path("data/tmp")
 OUT.mkdir(parents=True, exist_ok=True)
