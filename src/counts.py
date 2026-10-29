@@ -9,6 +9,8 @@ TMP.mkdir(parents=True, exist_ok=True)
 
 MIN_DRUG_CASES = 100   # drugs with fewer cases are dropped
 MIN_PAIR_CASES = 3     # drug-event pairs with fewer cases are dropped
+ROLES = "'PS'"         # primary suspect only; use "'PS','SS'" to include secondary suspects
+MAX_EVENTS_PER_CASE = 30   # cases with more events than this are dropped
 
 con = duckdb.connect()
 con.execute("PRAGMA memory_limit='4GB'")
@@ -17,21 +19,30 @@ con.execute(f"PRAGMA temp_directory='{TMP}'")
 drug_src = f"read_parquet('{CLEAN}/drug.parquet')"
 reac_src = f"read_parquet('{CLEAN}/reac.parquet')"
 
-# 1. One row per case-drug, only for cases that also have a reaction
+# 0. Eligible cases: not an extreme multi-event report
+con.execute(f"""
+    CREATE TEMP TABLE eligible AS
+    SELECT primaryid FROM {reac_src}
+    GROUP BY primaryid HAVING COUNT(*) <= {MAX_EVENTS_PER_CASE}
+""")
+
+# 1. One row per case-drug (selected roles only, eligible cases only)
 print("Step 1: case-drug table ...")
 con.execute(f"""
     COPY (
         SELECT DISTINCT primaryid, drug FROM {drug_src}
-        WHERE primaryid IN (SELECT primaryid FROM {reac_src})
+        WHERE role_cod IN ({ROLES})
+          AND primaryid IN (SELECT primaryid FROM eligible)
     ) TO '{OUT}/case_drug.parquet' (FORMAT PARQUET)
 """)
 
-# 2. One row per case-event, only for cases that also have a suspect drug
+# 2. One row per case-event, for cases that have a selected drug
 print("Step 2: case-event table ...")
 con.execute(f"""
     COPY (
         SELECT primaryid, pt FROM {reac_src}
-        WHERE primaryid IN (SELECT primaryid FROM {drug_src})
+        WHERE primaryid IN (SELECT primaryid FROM eligible)
+          AND primaryid IN (SELECT primaryid FROM {drug_src} WHERE role_cod IN ({ROLES}))
     ) TO '{OUT}/case_event.parquet' (FORMAT PARQUET)
 """)
 
