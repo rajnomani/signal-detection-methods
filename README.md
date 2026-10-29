@@ -76,7 +76,7 @@ Full tables: `outputs/gabapentin_pregabalin_all_methods.csv`.
 
 ## Reproducing
 
-The data is not in this repository. Download the ASCII files for each quarter from the FDA's FAERS Quarterly Data Files page, unzip them into `data/raw/`, then run:
+The data is not in this repository. Download the ASCII files for each quarter from the FDA's FAERS Quarterly Data Files page and unzip them into `data/raw/`. Copy each quarter's `DELETE*.txt` file (from its `Deleted` folder) into `data/deleted_lists/`, then run:
 
 ```
 pip install -r requirements.txt
