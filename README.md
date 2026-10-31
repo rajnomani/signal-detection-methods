@@ -8,7 +8,7 @@ A comparison of four disproportionality methods for pharmacovigilance signal det
 - **After cleaning:** 17.99 million unique cases (latest version of each case, FDA-deleted cases removed).
 - **Analysis set:** 17,730,954 cases (primary suspect drugs only, cases with 30 or fewer events), 3,391 drugs, 1,191,181 drug-event pairs.
 - **Methods:** PRR, ROR, IC (BCPNN-style), EBGM.
-- **Main finding:** the methods agree on strong signals and differ in how many weak ones they flag. EBGM is the most conservative: it flags 24.4% of pairs, against 37.8% for IC, 42.8% for PRR and 46.1% for ROR.
+- **Main finding:** the methods agree on strong signals. With their original rules they flag between 24.4% (EBGM) and 46.1% (ROR) of pairs, but most of that gap comes from the cut-off rules. With matched rules the gap shrinks (41% to 46%, IC 38%). The methods differ most in which pairs they rank first.
 
 ## Results
 
@@ -44,6 +44,61 @@ For high-count pairs the four methods give nearly the same score. They diverge f
 
 Full tables: `outputs/gabapentin_pregabalin_all_methods.csv`.
 
+## Further analyses: how much do the methods agree?
+
+Three further analyses use the same 1,191,181 pairs. Each has its own script, an independent checker and a runner that repeats the analysis twice and confirms the output files are identical.
+
+### 1. Agreement with the original rules
+
+- 639,182 pairs (53.7%) are flagged by no method and 290,845 (24.4%) by all four. Only 13,844 (1.2%) are flagged by exactly one method.
+- Every EBGM signal is also an IC signal. PRR misses 86 and ROR misses 88 of the 290,933 EBGM signals.
+- Agreement between pairs of methods (Jaccard): PRR and ROR 0.92, ROR and IC 0.82, PRR and IC 0.78, IC and EBGM 0.65, PRR and EBGM 0.57, ROR and EBGM 0.53.
+- The gap between EBGM and the others is largest for pairs with few cases. EBGM flags 12.0% of pairs with 3 to 4 cases and 51.2% of pairs with 100 or more cases. PRR flags 38.2% and 54.9% in the same groups.
+- Rank correlation (Spearman) between the scores is 0.995 or higher for PRR, ROR, IC and EBGM. This is expected across more than a million pairs and says little about the top of the lists.
+
+Files: `outputs/agreement_*.csv`.
+
+### 2. Matched thresholds and top lists
+
+The original rules are not equally strict: PRR uses a point estimate, while ROR, IC and EBGM use lower limits. So the methods were compared again under two matched rules.
+
+| Rule | PRR | ROR | IC | EBGM |
+|---|---|---|---|---|
+| Point estimate ≥ 2 | 46.0% | 46.1% | not used (log scale) | 41.1% |
+| Lower limit above no association (PRR and ROR lower limit > 1, IC025 > 0, EB05 > 1) | 46.1% | 46.1% | 37.8% | 42.1% |
+
+- With matched rules EBGM flags about 41% to 42% of pairs, not 24.4%. Most of the earlier gap came from the EB05 ≥ 2 rule.
+- Agreement (Jaccard) under matched rules: PRR and ROR 0.998 to 0.9996, PRR or ROR with EBGM 0.89 to 0.91, IC with EBGM 0.90. Every IC signal is also an EBGM signal under these rules.
+- The methods agree much less on which pairs are ranked highest. Shared pairs in the top 100, 1,000 and 10,000 pairs by score:
+
+| Pair of scores | Top 100 | Top 1,000 | Top 10,000 |
+|---|---|---|---|
+| PRR and ROR | 88 | 965 | 9,851 |
+| PRR and EBGM | 20 | 421 | 8,163 |
+| PRR and IC | 4 | 123 | 2,605 |
+| IC and EBGM | 18 | 278 | 3,473 |
+
+- PRR and ROR top lists are dominated by pairs with few cases (median 12 cases in the top 100 for PRR, 7 in the top 10,000). IC top lists favour pairs with many cases (median 591.5 in the top 100). EBGM is in between (median 107.5 in the top 100).
+
+Files: `outputs/matched_*.csv`, `outputs/topk_overlap.csv`, `outputs/topk_cases.csv`.
+
+### 3. Ties, missing scores and pairs with at least 10 cases
+
+- No score is infinite and no tie crosses the cut-off of any top list, so the top lists do not depend on the tie-break rule (more cases first, then drug name, then event name).
+- 86 pairs have no PRR score and 88 have no ROR score. They are ranked last.
+- 470,157 pairs have at least 10 cases. Using only those pairs, the top 10,000 lists share 9,563 pairs for PRR and EBGM (95.6%) and 9,775 for PRR and ROR (97.8%). IC stays different: it shares 5,722 pairs (57.2%) with PRR.
+
+| Pair of scores (10 or more cases) | Top 100 | Top 1,000 | Top 10,000 |
+|---|---|---|---|
+| PRR and ROR | 89 | 956 | 9,775 |
+| PRR and EBGM | 37 | 783 | 9,563 |
+| PRR and IC | 10 | 239 | 5,722 |
+| IC and EBGM | 18 | 284 | 5,792 |
+
+Files: `outputs/ties_check.csv`, `outputs/topk_min10_overlap.csv`, `outputs/topk_min10_cases.csv`.
+
+These analyses measure agreement between methods, not accuracy. There is no reference set of true drug-event relationships here.
+
 ## Methods
 
 **Data cleaning**
@@ -64,6 +119,8 @@ Full tables: `outputs/gabapentin_pregabalin_all_methods.csv`.
 - **IC** as log2((a + 0.5) / (expected + 0.5)), with an approximate lower bound (IC025).
 - **EBGM**: a two-component gamma mixture prior fitted by maximum likelihood on a random sample of 300,000 pairs (conditioned on at least 3 cases per pair), then posterior EBGM and EB05 for every pair.
 
+**Agreement measures.** Pairs flagged by each method were compared with the overlap, the Jaccard index and Cohen's kappa. Scores were compared with Spearman rank correlation. Top lists of 100, 1,000 and 10,000 pairs were compared by the number of shared pairs.
+
 ## Limitations
 
 - FAERS is a spontaneous reporting system. Scores show reporting disproportion, not incidence or risk, and do not show that one drug is more dangerous than another.
@@ -73,6 +130,8 @@ Full tables: `outputs/gabapentin_pregabalin_all_methods.csv`.
 - Drug names are not mapped to a standard vocabulary, so spelling variants of the same drug are counted separately.
 - The EBGM code is my own implementation, not validated against the FDA's reference software. Treat its numbers as a comparison tool.
 - The 30-events-per-case cutoff is a judgement call. Changing it changes the results.
+- The agreement analyses use one minimum of 10 cases for the top-list check. Other minimums were not tested. IC was ranked by its point estimate, not by its lower bound.
+- Agreement between methods is not accuracy: there is no reference set of true drug-event relationships.
 
 ## Reproducing
 
@@ -87,6 +146,14 @@ python src/counts.py          # 2x2 counts per drug-event pair
 python src/signals.py         # PRR, ROR, IC
 python src/ebgm.py            # EBGM and four-method comparison
 python src/figures.py         # figures
+```
+
+Then the agreement analyses. Each runner repeats the analysis twice, confirms the output files are identical, and runs an independent recount:
+
+```
+python src/run_agreement.py   # agreement with the original rules
+python src/run_matched.py     # matched thresholds and top lists
+python src/run_robust.py      # ties, missing scores, pairs with 10+ cases
 ```
 
 `src/load_data.py` is an early exploration script and `src/diagnose.py` is the check that found the multi-drug report problem.
