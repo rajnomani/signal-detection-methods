@@ -1,0 +1,8 @@
+rule,method,pairs_flagged,share_percent
+point estimate >= 2,PRR,548318,46.03
+point estimate >= 2,ROR,549235,46.11
+point estimate >= 2,EBGM,489570,41.1
+lower limit above no association,PRR,549514,46.13
+lower limit above no association,ROR,549272,46.11
+lower limit above no association,IC,450527,37.82
+lower limit above no association,EBGM,501520,42.1

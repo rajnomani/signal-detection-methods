@@ -1,0 +1,10 @@
+rule,method_a,method_b,both,only_a,only_b,neither,jaccard,kappa
+point estimate >= 2,PRR,ROR,548316,2,919,641944,0.9983,0.9984
+point estimate >= 2,PRR,EBGM,489484,58834,86,642777,0.8926,0.8997
+point estimate >= 2,ROR,EBGM,489482,59753,88,641858,0.8911,0.8981
+lower limit above no association,PRR,ROR,549272,242,0,641667,0.9996,0.9996
+lower limit above no association,PRR,IC,450441,99073,86,641581,0.8196,0.8303
+lower limit above no association,PRR,EBGM,499970,49544,1550,640117,0.9073,0.9132
+lower limit above no association,ROR,IC,450439,98833,88,641821,0.8199,0.8307
+lower limit above no association,ROR,EBGM,499938,49334,1582,640327,0.9076,0.9134
+lower limit above no association,IC,EBGM,450527,0,50993,689661,0.8983,0.911
